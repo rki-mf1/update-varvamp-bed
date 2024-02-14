@@ -12,15 +12,16 @@ from sys import argv
 import os.path
 
 def verify(sequence):
-	'''This code verifies if a sequence is a DNA'''
+	'''This code verifies if a sequence is a DNA or contains ambiguous bases according to the IUPAC code.'''
 
 	# set the input sequence
 	seq = set(sequence)
 
-	# confirm if its elements is equal to the set of valid DNA bases
-	# Use a union method to ensure the sequence is verified if does not
-	# contain all the bases
-	if seq == {"A", "T", "C", "G"}.union(seq):
+	# Set of valid DNA bases including IUPAC ambiguity codes
+	valid_bases = {"A", "T", "C", "G", "Y", "R", "S", "W", "K", "M", "B", "D", "H", "V", "N"}
+
+	# confirm if its elements are only from the set of valid DNA bases
+	if seq.issubset(valid_bases):
 		return "DNA"
 	else:
 		return "Invalid DNA sequence"
@@ -130,8 +131,8 @@ def main(argv):
             primer_bed_df.iloc[:,1] = s_pos
             primer_bed_df.iloc[:,2] = e_pos
 
-            primer_bed_df.to_csv(os.path.dirname(argv[3])+'/'+os.path.basename(argv[3])+'.position.corrected.bed', index=False, sep='\t', header=False)
-            print("Primer.bed file has been updated. See: \n"+os.path.dirname(argv[3])+'/'+os.path.basename(argv[3])+'.position.corrected.bed')
+            primer_bed_df.to_csv('./'+os.path.dirname(argv[3])+'/'+os.path.basename(argv[3])+'.position.corrected.bed', index=False, sep='\t', header=False)
+            print("Primer.bed file has been updated. See: \n./"+os.path.dirname(argv[3])+'/'+os.path.basename(argv[3])+'.position.corrected.bed')
         except Exception as e:  # pragma: nocover
             return "An error has occured: " + str(e)
 if __name__ == "__main__":  # pragma: nocover
