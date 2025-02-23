@@ -9,73 +9,53 @@ from fuzzysearch import find_near_matches
 from Bio import SeqIO
 import pandas as pd
 from sys import argv
-import os.path
+import os
+
+
+def get_absolute_path(relative_path):
+    '''Convert the given relative path to an absolute path'''
+    return os.path.abspath(relative_path)
+
 
 def verify(sequence):
-	'''This code verifies if a sequence is a DNA or contains ambiguous bases according to the IUPAC code.'''
+    '''This code verifies if a sequence is a DNA or contains ambiguous bases according to the IUPAC code.'''
+    seq = set(sequence)
 
-	# set the input sequence
-	seq = set(sequence)
+    valid_bases = {"A", "T", "C", "G", "Y", "R", "S", "W", "K", "M", "B", "D", "H", "V", "N"}
 
-	# Set of valid DNA bases including IUPAC ambiguity codes
-	valid_bases = {"A", "T", "C", "G", "Y", "R", "S", "W", "K", "M", "B", "D", "H", "V", "N"}
+    if seq.issubset(valid_bases):
+        return "DNA"
+    else:
+        return "Invalid DNA sequence"
 
-	# confirm if its elements are only from the set of valid DNA bases
-	if seq.issubset(valid_bases):
-		return "DNA"
-	else:
-		return "Invalid DNA sequence"
 
 def rev_comp_if(seq):
-# adjusted code from https://www.geeksforgeeks.org/reverse-complement-of-dna-strand-using-python/
-	comp = []
-	if verify(seq) == "DNA":
-		for base in seq:
-			if base == "A": comp.append("T")
-			elif base == "G": comp.append("C")
-			elif base == "T": comp.append("A")
-			elif base == "C": comp.append("G")
-			### mask ambigious bases with N
-			elif base == "Y": comp.append("N")
-			elif base == "R": comp.append("N")
-			elif base == "S": comp.append("N")
-			elif base == "W": comp.append("N")
-			elif base == "K": comp.append("N")
-			elif base == "M": comp.append("N")
-			elif base == "B": comp.append("N")
-			elif base == "D": comp.append("N")
-			elif base == "H": comp.append("N")
-			elif base == "V": comp.append("N")
-			elif base == "N": comp.append("N")
-	else:
-		return "Invalid DNA Sequence"
+    '''Reverse complement the DNA sequence if valid, with ambiguity handling'''
+    comp = []
+    if verify(seq) == "DNA":
+        for base in seq:
+            if base == "A": comp.append("T")
+            elif base == "G": comp.append("C")
+            elif base == "T": comp.append("A")
+            elif base == "C": comp.append("G")
+            elif base in ["Y", "R", "S", "W", "K", "M", "B", "D", "H", "V", "N"]:
+                comp.append("N")  # Mask ambiguous bases with 'N'
+    else:
+        return "Invalid DNA Sequence"
 
-	# reverse the sequence
-	comp_rev = comp[::-1]
+    return "".join(comp[::-1])  # Return the reverse complement
 
-	# convert list to string
-	comp_rev = "".join(comp_rev)
-	return comp_rev
-
-"""considered ambigious bases (https://www.bioinformatics.org/sms/iupac.html)
-"""
 
 def update_positions(primer_df, record_dict):
+    '''Update the primer positions in the provided reference sequence'''
     try:
-        start_pos = []
-        end_pos = []
+        start_pos, end_pos = [], []
 
-        for index, row in primer_df.iterrows():
+        for _, row in primer_df.iterrows():
             primer = str(row['seq']).upper()
+            revprimer = rev_comp_if(primer)
+            reference = str(record_dict[list(record_dict)[0]].seq).upper()
 
-            # reverse compliment the primer sequence
-            revprimer = rev_comp_if(str(row['seq']).upper())
-
-            # get reference sequence of the 1st entry from fasta file
-            reference=str(record_dict[list(record_dict)[0]].seq).upper()
-
-            # fuzzy search primer sequence in reference sequence
-            # allowing max. 2 mismatches (Levenshtein distance of 2)
             primer_match = find_near_matches(primer, reference, max_l_dist=2)
             rev_primer_match = find_near_matches(revprimer, reference, max_l_dist=2)
 
@@ -85,55 +65,67 @@ def update_positions(primer_df, record_dict):
             elif len(rev_primer_match) == 1:
                 start_pos.append(rev_primer_match[0].start)
                 end_pos.append(rev_primer_match[0].end)
-            elif (len(primer_match) > 1 or len(rev_primer_match) > 1):
-                ## Maybe instead of raising an exception here choose the match nearest to initial primer position in varvamp bed file
+            elif len(primer_match) > 1 or len(rev_primer_match) > 1:
                 raise Exception("Primer sequence found multiple times in reference sequence.")
             else:
                 raise Exception("Primer sequence not found in reference sequence.")
 
-        # check if primer size is still the same
-        seq_size = list(map(lambda a, b: a-b, end_pos, start_pos))
-        if seq_size == list(primer_df['size']):
-            pass
-        else:
+        seq_size = [a - b for a, b in zip(end_pos, start_pos)]
+        if seq_size != list(primer_df['size']):
             raise Exception("The primer size before and after the update are not identical")
-    except:
-        raise Exception("update_position not possible")
-    return start_pos, end_pos
+
+        return start_pos, end_pos
+    except Exception as e:
+        raise Exception(f"Error in updating positions: {e}")
 
 
 def main(argv):
-    
     if len(argv) != 4:
         print('Please add required input files \n e.g.: python3 correct_primer_positions.py [path/to/Reference/.fasta] [path/to/primer/.tsv] [path/to/primer/.bed]')
         return
-    else:  
+    else:
         try:
-			#  read reference fasta file
-            if os.path.exists(argv[1]):
-                record_dict = SeqIO.to_dict(SeqIO.parse(argv[1],"fasta"))
-            else:
-                print("FASTA file not available.")
+            # Ensure paths are absolute
+            fasta_path = get_absolute_path(argv[1])
+            primer_tsv_path = get_absolute_path(argv[2])
+            primer_bed_path = get_absolute_path(argv[3])
 
-			# read the primer tsv and bed files
-            if os.path.exists(argv[2]):
-                primer_df = pd.read_csv(argv[2], sep="\t")
-            else:
-                print("TSV file not available.")
-            if os.path.exists(argv[3]):
-                primer_bed_df = pd.read_csv(argv[3], sep="\t", header=None)
-            else:
-                print("BED file not available.")
+            # Check if files exist
+            if not os.path.exists(fasta_path):
+                print(f"FASTA file not available: {fasta_path}")
+                return
+            if not os.path.exists(primer_tsv_path):
+                print(f"TSV file not available: {primer_tsv_path}")
+                return
+            if not os.path.exists(primer_bed_path):
+                print(f"BED file not available: {primer_bed_path}")
+                return
 
-			# update positions in bed file
-            s_pos, e_pos = update_positions(primer_df, record_dict)
+            # Read files
+            record_dict = SeqIO.to_dict(SeqIO.parse(fasta_path, "fasta"))
+            primer_df = pd.read_csv(primer_tsv_path, sep="\t")
+            primer_bed_df = pd.read_csv(primer_bed_path, sep="\t", header=None)
 
-            primer_bed_df.iloc[:,1] = s_pos
-            primer_bed_df.iloc[:,2] = e_pos
+            # Update primer positions
+            start_pos, end_pos = update_positions(primer_df, record_dict)
 
-            primer_bed_df.to_csv('./'+os.path.dirname(argv[3])+'/'+os.path.basename(argv[3])+'.position.corrected.bed', index=False, sep='\t', header=False)
-            print("Primer.bed file has been updated. See: \n./"+os.path.dirname(argv[3])+'/'+os.path.basename(argv[3])+'.position.corrected.bed')
-        except Exception as e:  # pragma: nocover
-            return "An error has occured: " + str(e)
-if __name__ == "__main__":  # pragma: nocover
+            # Update the BED file with new positions
+            primer_bed_df.iloc[:, 1] = start_pos
+            primer_bed_df.iloc[:, 2] = end_pos
+
+            # Ensure the output directory exists
+            output_dir = os.path.dirname(primer_bed_path)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            output_file = f"{output_dir}/{os.path.basename(primer_bed_path)}.position.corrected.bed"
+            primer_bed_df.to_csv(output_file, index=False, sep='\t', header=False)
+
+            print(f"Primer.bed file has been updated. See: {output_file}")
+
+        except Exception as e:
+            print(f"An error has occurred: {e}")
+
+
+if __name__ == "__main__":
     main(argv)
