@@ -118,10 +118,10 @@ def main(argv):
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
 
-            output_file = f"{output_dir}/{os.path.basename(primer_bed_path)}.position.corrected.bed"
+            output_file = f"{output_dir}/{os.path.splitext(os.path.basename(primer_bed_path))[0]}-position-corrected.bed"
             primer_bed_df.to_csv(output_file, index=False, sep='\t', header=False)
 
-            print(f"Primer.bed file has been updated. See: {output_file}")
+            print(f"{os.path.basename(primer_bed_path)} file has been updated. See: {output_file}")
 
         except Exception as e:
             print(f"An error has occurred: {e}")
