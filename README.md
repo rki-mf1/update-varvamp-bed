@@ -24,8 +24,10 @@ conda activate py_bed
 
 ## Run the script
 
-The reference file in FASTA format and the primer TSV and BED files from [VarVAMP](https://github.com/jonas-fuchs/varVAMP) are taken as input and the updated BED file is obtained as output. Briefly summarized, the primer sequences from the TSV file are searched for in the reference, with max. mismatch of 2, and then the match positions are taken as new primer positions.
+The reference file in FASTA format and the primer TSV and BED files from [VarVAMP](https://github.com/jonas-fuchs/varVAMP) are taken as input and the updated BED file is obtained as output. Briefly summarized, the primer sequences from the TSV file are searched  in the reference, with **max. mismatch of 2**, and then the match positions are taken as new primer positions.
 
 ```bash
 python3 correct_primer_positions.py [path/to/Reference/.fasta] [path/to/primer/.tsv] [path/to/primer/.bed]
 ```
+
+**Attention:** This is a very simple adjutment script for the primer positions. You can also change the maximum mismatches in the Python script. However, this might lead to multiple best hits of a primer and the script will stop. 
